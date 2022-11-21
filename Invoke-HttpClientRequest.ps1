@@ -1,3 +1,4 @@
+using namespace System.Net
 Add-Type -AssemblyName System.Net.Http
 function Invoke-HTTPClientRequest {
 
@@ -9,54 +10,51 @@ function Invoke-HTTPClientRequest {
     [Parameter (Mandatory = $false)] [int]$Timeout
     )
 
-    $cookieContainer = [System.Net.CookieContainer]::new()
+    $cookieContainer = [CookieContainer]::new()
 
-    $handler = [System.Net.Http.HttpClientHandler]::new();
-    $handler.ClientCertificateOptions = [System.Net.Http.ClientCertificateOption]::Automatic;
+    $handler = [Http.HttpClientHandler]::new();
+    $handler.ClientCertificateOptions = [Http.ClientCertificateOption]::Automatic;
     $handler.SslProtocols = [System.Security.Authentication.SslProtocols]::Tls12;
 
-    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client = [Http.HttpClient]::new($handler)
 
     if($Timeout -gt 0){
         $client.Timeout = New-TimeSpan -Seconds $Timeout
     }
     
-    $request = [System.Net.Http.HttpRequestMessage]::new()
+    $request = [Http.HttpRequestMessage]::new()
     $request.Method = $Method
     $request.RequestUri = $URI
 
-    foreach($item in $Headers.GetEnumerator()){
-        $request.Headers.Add($item.Name, $item.Value)
+    if($Headers -ne $null){
+        foreach($item in $Headers.GetEnumerator()){
+            $request.Headers.Add($item.Name, $item.Value)
+        }
     }
 
     if($Body -ne $null){
         $encodedItems = @()
         foreach( $item in $Body.GetEnumerator()){
-            $encodedItems += [System.Net.WebUtility]::UrlEncode($item.Name) + "=" + [System.Net.WebUtility]::UrlEncode($item.Value)
+            $encodedItems += [WebUtility]::UrlEncode($item.Name) + "=" + [WebUtility]::UrlEncode($item.Value)
         }
 
         $content_string = ($encodedItems -join "&")
         Write-Host "Writing " $content_string.Length " bytes"
     
-        $request.Content = [System.Net.Http.StringContent]::new( $content_string, [System.Text.Encoding]::UTF8, "application/x-www-form-urlencoded");
-        $request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/x-www-form-urlencoded");
+        $request.Content = [Http.StringContent]::new( $content_string, [System.Text.Encoding]::UTF8, "application/x-www-form-urlencoded");
+        $request.Content.Headers.ContentType = [Http.Headers.MediaTypeHeaderValue]::Parse("application/x-www-form-urlencoded");
     }
 
-    $HttpResponseMessageObject = $null
+    #$HttpResponseMessageObject = $null
     $Response = $null
     try {
         $HttpResponseMessageObject = $client.SendAsync($request).GetAwaiter().GetResult()
-        $HttpResponseMessageObject.EnsureSuccessStatusCode()
+        #$HttpResponseMessageObject.EnsureSuccessStatusCode()|  Out-Null
         $Response =  $HttpResponseMessageObject.Content.ReadAsStringAsync().GetAwaiter().GetResult()
     } catch {
         $d = $(Get-Date)
         Write-Host "Failed at: $d"
-        if($_.ErrorDetails.Message) {
-            $Response = $_.ErrorDetails.Message
-        } else {
-            $Response = $_.Exception.ToString()
-        }
-        return $Response
+        $Response = $_.Exception
     }
 
     return $Response
